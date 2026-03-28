@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neel Ved | 3D Model Developer & MS Manufacturing</title>
-  <meta name="description" content="Neel Ved — 3D Model Developer specializing in manufacturing-grade assets, WebXR, and immersive digital experiences." />
+  <title>Neel Ajay Ved | MS Manufacturing · 3D Printing · WebXR</title>
+  <meta name="description" content="Neel Ajay Ved — MS Manufacturing Engineering at ASU. 3D Printing Enthusiast, Production Engineer, R&D in Additive Manufacturing." />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -27,19 +27,24 @@
     <div class="loader-ring"></div>
     <div class="loader-inner">
       <svg class="loader-gear" viewBox="0 0 100 100">
-        <path id="gear-path" fill="#00d4ff" opacity="0.8"/>
+        <path id="gear-path" fill="#00d4ff" opacity="0.8" fill-rule="evenodd"/>
       </svg>
     </div>
     <div class="loader-info">
-      <span class="loader-label">INITIALIZING PORTFOLIO OS</span>
+      <span class="loader-label">INITIALIZING PORTFOLIO OS v3.1</span>
       <div class="loader-bar-wrap"><div class="loader-bar" id="loader-bar"></div></div>
       <span class="loader-pct" id="loader-pct">0%</span>
     </div>
   </div>
 
-  <!-- HAND TRACKING OVERLAY -->
+  <!-- FACE TRACKING CANVAS -->
+  <canvas id="face-canvas"></canvas>
+
+  <!-- HAND TRACKING CANVAS -->
   <canvas id="hand-canvas"></canvas>
-  <video id="hand-video" playsinline style="display:none;"></video>
+
+  <!-- SHARED CAMERA VIDEO -->
+  <video id="shared-video" playsinline style="display:none;"></video>
 
   <!-- CUSTOM CURSOR -->
   <div id="cursor-dot"></div>
@@ -48,6 +53,42 @@
   <!-- NOTIFICATION -->
   <div id="notification"></div>
 
+  <!-- GESTURE HUD -->
+  <div id="gesture-hud">
+    <div class="ghud-title">GESTURE CONTROL</div>
+    <div class="ghud-item" data-g="palm">
+      <span class="ghud-icon">✋</span>
+      <div class="ghud-info">
+        <span class="ghud-name">OPEN PALM</span>
+        <span class="ghud-desc">Drive camera parallax</span>
+      </div>
+      <div class="ghud-active-bar"></div>
+    </div>
+    <div class="ghud-item" data-g="point">
+      <span class="ghud-icon">👆</span>
+      <div class="ghud-info">
+        <span class="ghud-name">POINT</span>
+        <span class="ghud-desc">Hover &amp; highlight</span>
+      </div>
+      <div class="ghud-active-bar"></div>
+    </div>
+    <div class="ghud-item" data-g="pinch">
+      <span class="ghud-icon">🤏</span>
+      <div class="ghud-info">
+        <span class="ghud-name">PINCH</span>
+        <span class="ghud-desc">Click &amp; activate</span>
+      </div>
+      <div class="ghud-active-bar"></div>
+    </div>
+  </div>
+
+  <!-- FACE SHADOW STATUS -->
+  <div id="face-status">
+    <span id="face-icon">👤</span>
+    <span id="face-label">DIGITAL SHADOW OFF</span>
+    <span id="face-fps"></span>
+  </div>
+
   <!-- NAVIGATION -->
   <nav id="main-nav">
     <div class="nav-logo">
@@ -55,16 +96,16 @@
       <div class="logo-orbit"></div>
     </div>
     <ul class="nav-links">
-      <li><a href="#hero"    class="nav-link active" data-s="hero">01 ENTRY</a></li>
-      <li><a href="#gallery" class="nav-link"         data-s="gallery">02 GALLERY</a></li>
-      <li><a href="#process" class="nav-link"         data-s="process">03 PROCESS</a></li>
-      <li><a href="#contact" class="nav-link"         data-s="contact">04 PORTAL</a></li>
+      <li><a href="#hero"       class="nav-link active" data-s="hero">01 ENTRY</a></li>
+      <li><a href="#gallery"    class="nav-link"        data-s="gallery">02 GALLERY</a></li>
+      <li><a href="#experience" class="nav-link"        data-s="experience">03 JOURNEY</a></li>
+      <li><a href="#process"    class="nav-link"        data-s="process">04 PROCESS</a></li>
+      <li><a href="#contact"    class="nav-link"        data-s="contact">05 PORTAL</a></li>
     </ul>
     <div class="nav-actions">
-      <button id="btn-hand" class="nav-btn" title="Toggle hand tracking">
-        <span class="hand-icon">✋</span><span>HAND TRACK</span>
-      </button>
-      <button id="btn-xr-nav" class="nav-btn xr-btn" title="Enter XR">XR MODE</button>
+      <button id="btn-hand" class="nav-btn" title="Toggle hand tracking">✋ HAND</button>
+      <button id="btn-face" class="nav-btn face-btn" title="Toggle digital shadow">👤 SHADOW</button>
+      <button id="btn-xr-nav" class="nav-btn xr-btn" title="Enter XR">⬡ XR</button>
     </div>
   </nav>
 
@@ -72,45 +113,40 @@
   <div id="section-dots">
     <button class="sdot active" data-s="hero"></button>
     <button class="sdot" data-s="gallery"></button>
+    <button class="sdot" data-s="experience"></button>
     <button class="sdot" data-s="process"></button>
     <button class="sdot" data-s="contact"></button>
   </div>
 
-  <!-- HAND STATUS -->
-  <div id="hand-status">
-    <span id="hand-icon-live">✋</span>
-    <span id="hand-label">HAND TRACKING OFF</span>
-  </div>
-
   <!-- ═══════════════════════════════════════════════════
-       HERO SECTION
+       01 HERO
   ════════════════════════════════════════════════════ -->
   <section id="hero" class="section">
     <canvas id="hero-canvas"></canvas>
     <div class="hero-content">
       <div class="hero-tags">
-        <span class="tag">3D MODEL DEVELOPER</span>
-        <span class="tag">MS MANUFACTURING</span>
+        <span class="tag">3D PRINTING ENTHUSIAST</span>
+        <span class="tag">MS MANUFACTURING · ASU</span>
+        <span class="tag">ADDITIVE MFG R&amp;D</span>
         <span class="tag">WebXR SPECIALIST</span>
       </div>
       <h1 class="hero-name" id="hero-name">
         <span class="name-row" data-depth="0.04">NEEL</span>
         <span class="name-row accent" data-depth="0.07">VED</span>
       </h1>
-      <p class="hero-sub">Bridging Physical Manufacturing with Digital Reality</p>
+      <p class="hero-sub">Production Engineer · Researcher · Entrepreneur in Prototyping</p>
+      <p class="hero-location">📍 Tempe, Arizona · <a href="mailto:neelajay@asu.edu" class="hero-email">neelajay@asu.edu</a></p>
       <div class="hero-cta">
-        <a href="#gallery" class="btn btn-primary">View Work ↓</a>
+        <a href="#gallery" class="btn btn-primary">View Projects ↓</a>
+        <a href="#experience" class="btn btn-ghost">My Journey</a>
         <a href="#contact" class="btn btn-ghost">Open Portal</a>
       </div>
     </div>
-    <div class="scroll-hint">
-      <span>SCROLL</span>
-      <div class="scroll-line"></div>
-    </div>
+    <div class="scroll-hint"><span>SCROLL</span><div class="scroll-line"></div></div>
   </section>
 
   <!-- ═══════════════════════════════════════════════════
-       GALLERY SECTION
+       02 GALLERY — Real Projects
   ════════════════════════════════════════════════════ -->
   <section id="gallery" class="section">
     <canvas id="gallery-canvas"></canvas>
@@ -118,81 +154,67 @@
       <div class="section-head">
         <span class="section-tag">02 / VIRTUAL SHOWROOM</span>
         <h2>The Gallery</h2>
-        <p>Manufacturing-grade 3D models — hover to illuminate, click to inspect.</p>
+        <p>Research · Engineering · Innovation — hover to illuminate, click to inspect.</p>
       </div>
       <div class="project-grid">
 
         <div class="proj-card" data-idx="0">
-          <div class="proj-viewport">
-            <canvas class="proj-canvas" id="pc-0"></canvas>
-            <div class="proj-overlay">
-              <span class="proj-tag">MECHANICAL</span>
-            </div>
-          </div>
+          <div class="proj-viewport"><canvas class="proj-canvas" id="pc-0"></canvas>
+            <div class="proj-overlay"><span class="proj-tag">ASU RESEARCH · 2025</span></div></div>
           <div class="proj-info">
-            <h3>Turbine Engine Assembly</h3>
-            <p>High-fidelity PBR engine model — 14k polys, full LOD chain, game-ready export.</p>
-            <div class="proj-chips"><span>PBR</span><span>Optimized</span><span>LOD</span></div>
+            <h3>Polymer Lattice Helmet Liner</h3>
+            <p>3D printed BCC / FCC / TPMS / Schwarz lattice structures for graded-density helmet impact damping. Strength-to-weight optimization for aerospace & sports applications.</p>
+            <div class="proj-chips"><span>FDM</span><span>TPMS Lattice</span><span>Impact Damping</span><span>nTopology</span></div>
           </div>
         </div>
 
         <div class="proj-card" data-idx="1">
-          <div class="proj-viewport">
-            <canvas class="proj-canvas" id="pc-1"></canvas>
-            <div class="proj-overlay"><span class="proj-tag">INDUSTRIAL</span></div>
-          </div>
+          <div class="proj-viewport"><canvas class="proj-canvas" id="pc-1"></canvas>
+            <div class="proj-overlay"><span class="proj-tag">ASU RESEARCH · 2025</span></div></div>
           <div class="proj-info">
-            <h3>Planetary Gear System</h3>
-            <p>Multi-stage animated gearbox with realistic meshing simulation and tooth profiles.</p>
-            <div class="proj-chips"><span>Animated</span><span>Simulation</span></div>
+            <h3>QC Tools for 3D Print Waste Reduction</h3>
+            <p>SQC framework (CEDAC, control charts, Pareto analysis) applied to FDM dimensional accuracy. Automotive industry focus — data-driven defect reduction.</p>
+            <div class="proj-chips"><span>Six Sigma</span><span>CEDAC</span><span>SQC</span><span>DIMAC</span></div>
           </div>
         </div>
 
         <div class="proj-card" data-idx="2">
-          <div class="proj-viewport">
-            <canvas class="proj-canvas" id="pc-2"></canvas>
-            <div class="proj-overlay"><span class="proj-tag">ROBOTICS</span></div>
-          </div>
+          <div class="proj-viewport"><canvas class="proj-canvas" id="pc-2"></canvas>
+            <div class="proj-overlay"><span class="proj-tag">IEEE · PATENT IN PROCESS</span></div></div>
           <div class="proj-info">
-            <h3>6-DOF Robotic Arm</h3>
-            <p>Real-time inverse kinematics. Joint constraints, end-effector control, WebXR demo.</p>
-            <div class="proj-chips"><span>IK</span><span>WebXR</span><span>Real-time</span></div>
+            <h3>3D Printed Fracture Cast</h3>
+            <p>Photogrammetry-based custom fracture cast — Meshroom, MeshMixer, SolidWorks. IEEE publication 2024. Patent filed: "A Method of Creating a 3D Printed Fractured Cast".</p>
+            <div class="proj-chips"><span>Photogrammetry</span><span>Meshroom</span><span>SLA</span><span>IEEE</span></div>
           </div>
         </div>
 
         <div class="proj-card" data-idx="3">
-          <div class="proj-viewport">
-            <canvas class="proj-canvas" id="pc-3"></canvas>
-            <div class="proj-overlay"><span class="proj-tag">AEROSPACE</span></div>
-          </div>
+          <div class="proj-viewport"><canvas class="proj-canvas" id="pc-3"></canvas>
+            <div class="proj-overlay"><span class="proj-tag">FKDC SEASON 7 · 2023</span></div></div>
           <div class="proj-info">
-            <h3>FEA-Optimized Bracket</h3>
-            <p>Topology-optimized titanium aerospace bracket. FEA validated, 43% weight reduction.</p>
-            <div class="proj-chips"><span>FEA</span><span>Titanium</span><span>Topology</span></div>
+            <h3>GO-KART Design &amp; Manufacturing</h3>
+            <p>FEA-optimized multi-impact chassis for FKDC Season 7. CAD/CAM workflow, material procurement, sponsorships, energy absorption validation through finite element analysis.</p>
+            <div class="proj-chips"><span>FEA</span><span>CAD/CAM</span><span>ANSYS</span><span>Chassis</span></div>
           </div>
         </div>
 
         <div class="proj-card" data-idx="4">
-          <div class="proj-viewport">
-            <canvas class="proj-canvas" id="pc-4"></canvas>
-            <div class="proj-overlay"><span class="proj-tag">THERMAL</span></div>
-          </div>
+          <div class="proj-viewport"><canvas class="proj-canvas" id="pc-4"></canvas>
+            <div class="proj-overlay"><span class="proj-tag">IIT BOMBAY · 2023</span></div></div>
           <div class="proj-info">
-            <h3>Heat Exchanger</h3>
-            <p>CFD-ready shell & tube heat exchanger with visualized fluid path geometry.</p>
-            <div class="proj-chips"><span>CFD</span><span>Thermal</span><span>Fluid</span></div>
+            <h3>IIT Bombay — Rapid Manufacturing Lab</h3>
+            <p>Research intern: Sub-Zero Ice 3D Printing, Manned Drone fabrication, Sand 3D Printing. 5-axis machining (MSMA-HLM) using PowerMill &amp; PowerShape.</p>
+            <div class="proj-chips"><span>Ice AM</span><span>5-Axis CNC</span><span>PowerMill</span><span>Drones</span></div>
           </div>
         </div>
 
         <div class="proj-card" data-idx="5">
-          <div class="proj-viewport">
-            <canvas class="proj-canvas" id="pc-5"></canvas>
-            <div class="proj-overlay"><span class="proj-tag">DIGITAL TWIN</span></div>
-          </div>
+          <div class="proj-viewport"><canvas class="proj-canvas" id="pc-5"></canvas>
+            <div class="proj-overlay"><span class="proj-tag">DBIT · 2022</span></div></div>
           <div class="proj-info">
-            <h3>Smart Factory Layout</h3>
-            <p>Real-time digital twin of a manufacturing cell. IoT-integrated, process-planning ready.</p>
-            <div class="proj-chips"><span>Digital Twin</span><span>IoT</span><span>Planning</span></div>
+            <h3>Geneva Mechanism Conveyor Belt</h3>
+            <p>Converts continuous rotation → intermittent step motion. Motorised Geneva wheel drives timed conveyor belt intervals. Designed, fabricated &amp; tested at DBIT.</p>
+            <div class="proj-chips"><span>Mechanism Design</span><span>CAD</span><span>Fabrication</span></div>
           </div>
         </div>
 
@@ -201,34 +223,165 @@
   </section>
 
   <!-- ═══════════════════════════════════════════════════
-       PROCESS LAB SECTION
+       03 EXPERIENCE / JOURNEY
+  ════════════════════════════════════════════════════ -->
+  <section id="experience" class="section">
+    <canvas id="exp-canvas"></canvas>
+    <div class="exp-content">
+      <div class="section-head">
+        <span class="section-tag">03 / JOURNEY</span>
+        <h2>Career Trajectory</h2>
+        <p>From Mumbai to Arizona — the engineering path.</p>
+      </div>
+
+      <div class="timeline">
+
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-card">
+            <span class="tl-date">Jan 2026 – Present</span>
+            <h3>Graduate Researcher</h3>
+            <span class="tl-company">Arizona State University · Tempe, AZ</span>
+            <p>Interdisciplinary research at Nano scale. Qualitative &amp; quantitative data collection, management &amp; analysis. Curriculum design support and independent deadline management.</p>
+            <div class="tl-chips"><span>Research</span><span>Data Analysis</span><span>ASU</span></div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-card">
+            <span class="tl-date">Sep 2025 – Present</span>
+            <h3>Instructional Aide — RAS210 CAD/MFG Lab</h3>
+            <span class="tl-company">Ira A. Fulton Schools of Engineering, ASU · On-site</span>
+            <p>Teaching 3D scanning (KEYENCE VL-700) and 3D CAD modeling (Fusion 360). Lab session execution, grading, feedback, safety &amp; equipment discipline. STL workflows and scan data alignment.</p>
+            <div class="tl-chips"><span>KEYENCE VL-700</span><span>Fusion 360</span><span>3D Scanning</span></div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-dot orange"></div>
+          <div class="tl-card">
+            <span class="tl-date">Jul 2024 – Apr 2025</span>
+            <h3>Production &amp; Design Engineer</h3>
+            <span class="tl-company">WOL3D India Private Limited · Mumbai, On-site</span>
+            <p>Optimised 3D printing workflows using slicers, reducing print failures by <strong>25%</strong> and saving <strong>10 hrs/week</strong>. R&amp;D on 12+ filaments &amp; resins. FDM &amp; SLA project execution, laser engraving, 3D scanning for reverse engineering. Represented WOL3D at exhibitions.</p>
+            <div class="tl-chips"><span>FDM</span><span>SLA</span><span>Slicing</span><span>Laser Engraving</span><span>R&amp;D</span></div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-card">
+            <span class="tl-date">May 2023 – Jul 2023</span>
+            <h3>Research Intern — Rapid Manufacturing Lab</h3>
+            <span class="tl-company">Indian Institute of Technology, Bombay · On-site</span>
+            <p>Additive manufacturing research: Sub-Zero Ice 3D Printing, Manned Drone fabrication, Sand 3D Printing. 5-axis machining expertise (MSMA-HLM). Printer calibration, flight stability, PowerMill &amp; PowerShape programming.</p>
+            <div class="tl-chips"><span>Ice AM</span><span>5-Axis CNC</span><span>PowerShape</span><span>Drones</span></div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-dot orange"></div>
+          <div class="tl-card">
+            <span class="tl-date">Jun 2022 – Apr 2024</span>
+            <h3>Member — Madgear Motorsports Club</h3>
+            <span class="tl-company">Don Bosco Institute of Technology · Mumbai, Hybrid</span>
+            <p>High-performance dirt car design and build for PAN India competitions. Structural simulation using ANSYS Mechanical APDL. Chassis design, fabrication &amp; testing.</p>
+            <div class="tl-chips"><span>ANSYS</span><span>FEA</span><span>Chassis Design</span></div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-card">
+            <span class="tl-date">Aug 2022 – Feb 2023</span>
+            <h3>Technical Intern (Lead)</h3>
+            <span class="tl-company">CrEAST · L&amp;T Sponsored · Mumbai</span>
+            <p>"Engineering Future" program. Created learning materials, tracked student progress, organised exhibition. Empowering young minds in technology — led a cohort through course completion.</p>
+            <div class="tl-chips"><span>Leadership</span><span>Education</span><span>L&amp;T</span></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Education -->
+      <div class="edu-section">
+        <h3 class="edu-title">Education</h3>
+        <div class="edu-grid">
+          <div class="edu-card">
+            <div class="edu-icon">MS</div>
+            <div class="edu-info">
+              <h4>Master of Science — Manufacturing Engineering</h4>
+              <span>Arizona State University · Tempe, AZ</span>
+              <span class="edu-date">Aug 2025 – Jun 2027 · GPA 3.56</span>
+            </div>
+          </div>
+          <div class="edu-card">
+            <div class="edu-icon">BE</div>
+            <div class="edu-info">
+              <h4>Bachelor of Engineering — Mechanical Engineering</h4>
+              <span>Don Bosco Institute of Technology, Mumbai</span>
+              <span class="edu-date">Aug 2021 – Jun 2024 · GPA 3.2</span>
+            </div>
+          </div>
+          <div class="edu-card">
+            <div class="edu-icon">DIP</div>
+            <div class="edu-info">
+              <h4>Diploma — Mechanical Engineering</h4>
+              <span>K J Somaiya Polytechnic · Mumbai</span>
+              <span class="edu-date">Aug 2018 – Jun 2021 · Volleyball Captain</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Publications -->
+      <div class="pub-section">
+        <h3 class="edu-title">Publications &amp; Patents</h3>
+        <div class="pub-list">
+          <div class="pub-item">
+            <span class="pub-badge">IEEE 2024</span>
+            <span class="pub-text">Enabling Spatial Visualisation in Students with Learning Disabilities Using CAD Tools</span>
+          </div>
+          <div class="pub-item">
+            <span class="pub-badge">PATENT</span>
+            <span class="pub-text">A Method of Creating a 3D Printed Fractured Cast <span class="pub-status">· Patent in Process</span></span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════
+       04 PROCESS LAB
   ════════════════════════════════════════════════════ -->
   <section id="process" class="section">
     <canvas id="process-canvas"></canvas>
     <div class="process-content">
       <div class="section-head">
-        <span class="section-tag">03 / PROCESS LAB</span>
+        <span class="section-tag">04 / PROCESS LAB</span>
         <h2>From CAD to Digital Reality</h2>
-        <p>MS Manufacturing — the engineering pipeline behind every model.</p>
+        <p>MS Manufacturing Engineering — the pipeline from raw design to immersive experience.</p>
       </div>
 
       <div class="pipeline">
         <div class="pipe-step" data-step="0">
           <div class="pipe-icon">CAD</div>
           <h3>Design</h3>
-          <p>SolidWorks · CATIA · Fusion 360</p>
+          <p>SolidWorks · Fusion 360 · CATIA</p>
         </div>
         <div class="pipe-arrow">⟶</div>
         <div class="pipe-step" data-step="1">
-          <div class="pipe-icon">OPT</div>
-          <h3>Optimize</h3>
-          <p>Poly reduction · UV mapping · LOD</p>
+          <div class="pipe-icon">SIM</div>
+          <h3>Simulate</h3>
+          <p>ANSYS · FEA · MATLAB · SQC</p>
         </div>
         <div class="pipe-arrow">⟶</div>
         <div class="pipe-step" data-step="2">
-          <div class="pipe-icon">PBR</div>
-          <h3>Material</h3>
-          <p>Substance · Physically Based Rendering</p>
+          <div class="pipe-icon">3DP</div>
+          <h3>Print</h3>
+          <p>FDM · SLA · SLS · PolyJet</p>
         </div>
         <div class="pipe-arrow">⟶</div>
         <div class="pipe-step" data-step="3">
@@ -239,31 +392,40 @@
       </div>
 
       <div class="skills-wrap">
-        <div class="skill-row"><span class="sk-label">SolidWorks / CATIA</span><div class="sk-bar"><div class="sk-fill" data-w="92"></div></div><span class="sk-pct">92%</span></div>
-        <div class="skill-row"><span class="sk-label">Three.js / WebGL</span><div class="sk-bar"><div class="sk-fill" data-w="88"></div></div><span class="sk-pct">88%</span></div>
-        <div class="skill-row"><span class="sk-label">Blender / ZBrush</span><div class="sk-bar"><div class="sk-fill" data-w="85"></div></div><span class="sk-pct">85%</span></div>
-        <div class="skill-row"><span class="sk-label">Unity / WebXR</span><div class="sk-bar"><div class="sk-fill" data-w="80"></div></div><span class="sk-pct">80%</span></div>
-        <div class="skill-row"><span class="sk-label">FEA / CFD Simulation</span><div class="sk-bar"><div class="sk-fill" data-w="78"></div></div><span class="sk-pct">78%</span></div>
-        <div class="skill-row"><span class="sk-label">Python / Automation</span><div class="sk-bar"><div class="sk-fill" data-w="75"></div></div><span class="sk-pct">75%</span></div>
+        <div class="skill-row"><span class="sk-label">FDM / SLA / SLS 3D Printing</span><div class="sk-bar"><div class="sk-fill" data-w="95"></div></div><span class="sk-pct">95%</span></div>
+        <div class="skill-row"><span class="sk-label">SolidWorks (Certified)</span><div class="sk-bar"><div class="sk-fill" data-w="92"></div></div><span class="sk-pct">92%</span></div>
+        <div class="skill-row"><span class="sk-label">Fusion 360 / CAD/CAM</span><div class="sk-bar"><div class="sk-fill" data-w="88"></div></div><span class="sk-pct">88%</span></div>
+        <div class="skill-row"><span class="sk-label">ANSYS / FEA</span><div class="sk-bar"><div class="sk-fill" data-w="82"></div></div><span class="sk-pct">82%</span></div>
+        <div class="skill-row"><span class="sk-label">CNC &amp; Laser Tech / 3D Scanning</span><div class="sk-bar"><div class="sk-fill" data-w="78"></div></div><span class="sk-pct">78%</span></div>
+        <div class="skill-row"><span class="sk-label">Six Sigma / SQC / Lean</span><div class="sk-bar"><div class="sk-fill" data-w="78"></div></div><span class="sk-pct">78%</span></div>
+        <div class="skill-row"><span class="sk-label">MATLAB / Python</span><div class="sk-bar"><div class="sk-fill" data-w="72"></div></div><span class="sk-pct">72%</span></div>
+        <div class="skill-row"><span class="sk-label">Three.js / WebGL / WebXR</span><div class="sk-bar"><div class="sk-fill" data-w="80"></div></div><span class="sk-pct">80%</span></div>
+      </div>
+
+      <div class="certs-row">
+        <div class="cert-chip">🏅 Additive Manufacturing Specialization · ASU Feb 2024</div>
+        <div class="cert-chip">🏅 Simulation Analysis — Fusion 360 · Apr 2024</div>
+        <div class="cert-chip">🏅 Yellow Belt Six Sigma · ASU Dec 2026</div>
+        <div class="cert-chip">🏅 SolidWorks — LinkedIn Assessment Passed</div>
       </div>
 
       <div class="stats-row">
-        <div class="stat"><span class="stat-n" data-count="50">0</span><span class="stat-l">Projects Delivered</span></div>
-        <div class="stat"><span class="stat-n" data-count="3">0</span><span class="stat-l">Years of XP</span></div>
-        <div class="stat"><span class="stat-n" data-count="12">0</span><span class="stat-l">Industries Served</span></div>
-        <div class="stat"><span class="stat-n" data-count="8">0</span><span class="stat-l">Tools Mastered</span></div>
+        <div class="stat"><span class="stat-n" data-count="7">0</span><span class="stat-l">Projects</span></div>
+        <div class="stat"><span class="stat-n" data-count="3">0</span><span class="stat-l">Years XP</span></div>
+        <div class="stat"><span class="stat-n" data-count="2">0</span><span class="stat-l">Papers / Patents</span></div>
+        <div class="stat"><span class="stat-n" data-count="15">0</span><span class="stat-l">Technical Skills</span></div>
       </div>
     </div>
   </section>
 
   <!-- ═══════════════════════════════════════════════════
-       XR PORTAL / CONTACT
+       05 CONTACT / XR PORTAL
   ════════════════════════════════════════════════════ -->
   <section id="contact" class="section">
     <canvas id="contact-canvas"></canvas>
     <div class="contact-content">
       <div class="section-head">
-        <span class="section-tag">04 / XR PORTAL</span>
+        <span class="section-tag">05 / XR PORTAL</span>
         <h2>Establish Connection</h2>
       </div>
 
@@ -272,13 +434,13 @@
           <div class="terminal">
             <div class="term-header">
               <span class="td red"></span><span class="td yellow"></span><span class="td green"></span>
-              <span class="term-title">neel_ved@portfolio ~ %</span>
+              <span class="term-title">neel_ved@asu.edu ~ %</span>
             </div>
             <div class="term-body">
               <div class="term-output" id="term-out">
                 <div class="term-line"><span class="t-sys">[SYS]</span> Portfolio OS v3.1 — Loaded.</div>
-                <div class="term-line"><span class="t-sys">[SYS]</span> User: <span class="t-hi">VIEWER</span> — Authentication: GRANTED.</div>
-                <div class="term-line"><span class="t-nv">[NV]</span>  Ready to collaborate. Fill the fields below.</div>
+                <div class="term-line"><span class="t-sys">[SYS]</span> User: <span class="t-hi">VIEWER</span> — Access: <span class="t-hi">GRANTED</span>.</div>
+                <div class="term-line"><span class="t-nv">[NV]</span>  Hi! I'm Neel. Ready to collaborate on manufacturing, 3D printing, or XR. Fill the fields below.</div>
                 <div class="term-line t-blink">█</div>
               </div>
               <form id="contact-form" class="term-form" novalidate>
@@ -292,7 +454,7 @@
                 </div>
                 <div class="term-field">
                   <label><span class="t-prompt">neel_ved:~$</span> MESSAGE</label>
-                  <textarea id="cf-msg" rows="4" placeholder="Describe your project or collaboration idea…"></textarea>
+                  <textarea id="cf-msg" rows="4" placeholder="Describe your project, research collaboration, or inquiry…"></textarea>
                 </div>
                 <button type="submit" class="btn btn-terminal">TRANSMIT MESSAGE ⟶</button>
               </form>
@@ -304,33 +466,40 @@
           <button id="btn-enter-xr" class="xr-big-btn">
             <div class="xr-hex">⬡</div>
             <span class="xr-big-label">ENTER XR EXPERIENCE</span>
-            <span class="xr-big-sub">Immersive WebXR · Requires compatible headset</span>
+            <span class="xr-big-sub">Immersive WebXR — Requires compatible headset</span>
           </button>
 
           <div class="social-links">
-            <a href="#" class="slink">LinkedIn ↗</a>
-            <a href="#" class="slink">GitHub ↗</a>
-            <a href="#" class="slink">Sketchfab ↗</a>
+            <a href="https://www.linkedin.com/in/vedneel06/" target="_blank" rel="noopener" class="slink">LinkedIn ↗</a>
+            <a href="mailto:neelajay@asu.edu" class="slink">neelajay@asu.edu ✉</a>
+            <a href="tel:4809425529" class="slink">480.942.5529 ☎</a>
             <a href="#" class="slink download">Download Resume ↓</a>
           </div>
 
           <div class="contact-info">
-            <p><span class="ci-label">LOCATION</span> United States</p>
-            <p><span class="ci-label">DEGREE</span> MS Manufacturing</p>
-            <p><span class="ci-label">ROLE</span> 3D Model Developer</p>
+            <p><span class="ci-label">LOCATION</span>Tempe, Arizona, USA</p>
+            <p><span class="ci-label">DEGREE</span>MS Manufacturing Engineering · ASU</p>
+            <p><span class="ci-label">GRAD</span>Expected May 2027 · GPA 3.56</p>
+            <p><span class="ci-label">FOCUS</span>3D Printing · R&amp;D · Additive Mfg</p>
+            <p><span class="ci-label">OPEN TO</span>Internship · Full-time (post May 2027)</p>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- SCRIPTS -->
+  <!-- SCRIPTS — Regular (globals) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.4/gsap.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.4/ScrollTrigger.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <!-- SCRIPTS — ES Modules -->
   <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/camera-manager.js"></script>
   <script type="module" src="js/hand-tracking.js"></script>
+  <script type="module" src="js/face-tracking.js"></script>
 </body>
 </html>

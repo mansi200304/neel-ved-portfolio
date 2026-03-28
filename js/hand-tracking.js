@@ -1,195 +1,248 @@
 /* ══════════════════════════════════════════════════════════
    HAND TRACKING — MediaPipe Hands
-   Controls:
-     ✋ Open palm    → rotate hero scene (via mouse event dispatch)
-     👆 Index point  → highlight nearest nav section
-     🤏 Pinch        → click / activate hovered element
+   
+   WHAT IT DOES:
+   ✋ Open Palm  → Drives camera parallax in hero (dispatches
+                   mouse-move events from index-finger position)
+   👆 Index Point → Moves custom cursor + hovers elements
+   🤏 Pinch        → Triggers click on the element under cursor
+                     + spawns orange burst particles
+
+   The Gesture HUD (bottom-left) shows which gesture is active
+   and what it's currently controlling.
    ══════════════════════════════════════════════════════════ */
 
-const HAND_LABEL  = document.getElementById('hand-label');
-const HAND_STATUS = document.getElementById('hand-status');
-const HAND_BTN    = document.getElementById('btn-hand');
+import { registerHandler, unregisterHandler } from './camera-manager.js';
+
 const HAND_CANVAS = document.getElementById('hand-canvas');
-const HAND_VIDEO  = document.getElementById('hand-video');
 const CTX         = HAND_CANVAS.getContext('2d');
+const BTN         = document.getElementById('btn-hand');
+const HUD         = document.getElementById('gesture-hud');
+const CURSOR_DOT  = document.getElementById('cursor-dot');
+const CURSOR_RING = document.getElementById('cursor-ring');
 
-let trackingEnabled = false;
-let handsInstance   = null;
-let cameraInstance  = null;
+let handsInstance = null;
+let active        = false;
+let lastPinch     = false;
 
-/* Smoothing buffers */
+/* Smoothing */
 const smooth = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 
-/* ── Gesture Detection ──────────────────────────────────── */
-function getPinchDistance(landmarks) {
-  const thumb = landmarks[4];
-  const index = landmarks[8];
-  const dx = thumb.x - index.x;
-  const dy = thumb.y - index.y;
-  return Math.sqrt(dx * dx + dy * dy);
-}
+/* Pop particles for pinch */
+const pops = [];
 
-function isOpenPalm(landmarks) {
-  const tips = [8, 12, 16, 20];
-  const mcp  = [6, 10, 14, 18];
-  let extended = 0;
-  tips.forEach((tip, i) => {
-    if (landmarks[tip].y < landmarks[mcp[i]].y) extended++;
-  });
-  return extended >= 3;
-}
-
-function isPointing(landmarks) {
-  const indexTip  = landmarks[8];
-  const indexMCP  = landmarks[6];
-  const middleTip = landmarks[12];
-  const middleMCP = landmarks[10];
-  const indexUp   = indexTip.y < indexMCP.y;
-  const middleIn  = middleTip.y >= middleMCP.y;
-  return indexUp && middleIn;
-}
-
-/* ── Resize canvas to window ────────────────────────────── */
-function resizeHandCanvas() {
+/* ── Canvas resize ──────────────────────────────────────── */
+function resize() {
   HAND_CANVAS.width  = window.innerWidth;
   HAND_CANVAS.height = window.innerHeight;
 }
-resizeHandCanvas();
-window.addEventListener('resize', resizeHandCanvas);
+resize();
+window.addEventListener('resize', resize);
 
-/* ── Draw skeleton overlay ──────────────────────────────── */
-function drawHand(landmarks, gesture) {
-  CTX.clearRect(0, 0, HAND_CANVAS.width, HAND_CANVAS.height);
+/* ── Gesture detection helpers ──────────────────────────── */
+function pinchDist(lm) {
+  const dx = lm[4].x - lm[8].x;
+  const dy = lm[4].y - lm[8].y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
 
+function isOpenPalm(lm) {
+  const tips = [8, 12, 16, 20];
+  const mcps = [6, 10, 14, 18];
+  return tips.filter((t, i) => lm[t].y < lm[mcps[i]].y).length >= 3;
+}
+
+function isPointing(lm) {
+  return lm[8].y < lm[6].y && lm[12].y >= lm[10].y;
+}
+
+/* ── HUD update ─────────────────────────────────────────── */
+function setHUDGesture(gesture) {
+  HUD.querySelectorAll('.ghud-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.g === gesture);
+  });
+}
+
+/* ── Pinch particle burst ───────────────────────────────── */
+function spawnPinchBurst(x, y) {
+  for (let i = 0; i < 16; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 5;
+    pops.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1.0,
+      decay: 0.04 + Math.random() * 0.04,
+      size: 2 + Math.random() * 4,
+    });
+  }
+}
+
+function updatePops() {
+  for (let i = pops.length - 1; i >= 0; i--) {
+    const p = pops[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15;
+    p.vx *= 0.96;
+    p.life -= p.decay;
+    if (p.life <= 0) pops.splice(i, 1);
+  }
+}
+
+function drawPops() {
+  pops.forEach(p => {
+    CTX.globalAlpha = p.life * 0.9;
+    CTX.fillStyle   = '#ff6b00';
+    CTX.beginPath();
+    CTX.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    CTX.fill();
+  });
+}
+
+/* ── Draw hand skeleton ─────────────────────────────────── */
+const CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],[0,17],
+];
+
+function drawSkeleton(lm, gesture) {
   const W = HAND_CANVAS.width;
   const H = HAND_CANVAS.height;
+  const isPinch = gesture === 'pinch';
+  const lineColor = isPinch ? 'rgba(255,107,0,0.75)' : 'rgba(0,212,255,0.65)';
 
-  /* Connections */
-  const CONNECTIONS = [
-    [0,1],[1,2],[2,3],[3,4],
-    [0,5],[5,6],[6,7],[7,8],
-    [5,9],[9,10],[10,11],[11,12],
-    [9,13],[13,14],[14,15],[15,16],
-    [13,17],[17,18],[18,19],[19,20],
-    [0,17],
-  ];
-
-  CTX.strokeStyle = gesture === 'pinch' ? '#ff6b00' : '#00d4ff';
-  CTX.lineWidth   = 1.5;
-  CTX.globalAlpha = 0.7;
-
+  CTX.lineWidth = 1.5;
+  CTX.strokeStyle = lineColor;
   CONNECTIONS.forEach(([a, b]) => {
-    const la = landmarks[a], lb = landmarks[b];
+    const la = lm[a], lb = lm[b];
     CTX.beginPath();
     CTX.moveTo((1 - la.x) * W, la.y * H);
     CTX.lineTo((1 - lb.x) * W, lb.y * H);
     CTX.stroke();
   });
 
-  /* Joints */
-  landmarks.forEach((lm, i) => {
-    const x = (1 - lm.x) * W;
-    const y = lm.y * H;
-    const isTip = [4, 8, 12, 16, 20].includes(i);
+  const TIPS = [4, 8, 12, 16, 20];
+  lm.forEach((p, i) => {
+    const x = (1 - p.x) * W;
+    const y = p.y * H;
+    const isTip = TIPS.includes(i);
     CTX.globalAlpha = 1;
     CTX.beginPath();
-    CTX.arc(x, y, isTip ? 5 : 3, 0, Math.PI * 2);
-    CTX.fillStyle = isTip ? (gesture === 'pinch' ? '#ff6b00' : '#00d4ff') : '#ffffff';
+    CTX.arc(x, y, isTip ? 5.5 : 2.5, 0, Math.PI * 2);
+    CTX.fillStyle = isTip ? (isPinch ? '#ff6b00' : '#00d4ff') : '#ffffff';
     CTX.fill();
+
+    if (isTip) {
+      CTX.beginPath();
+      CTX.arc(x, y, 9, 0, Math.PI * 2);
+      CTX.strokeStyle = isPinch ? 'rgba(255,107,0,0.3)' : 'rgba(0,212,255,0.3)';
+      CTX.lineWidth = 1;
+      CTX.stroke();
+    }
   });
+}
 
-  /* Gesture label */
-  if (gesture) {
-    const icons = { pinch: '🤏', palm: '✋', point: '👆', idle: '' };
-    const labels = { pinch: 'PINCH', palm: 'PALM', point: 'POINT', idle: '' };
-    CTX.globalAlpha = 0.9;
-    CTX.font = '13px "Share Tech Mono", monospace';
-    CTX.fillStyle = '#00d4ff';
-    CTX.fillText(`${icons[gesture]} ${labels[gesture]}`, 16, HAND_CANVAS.height - 20);
-  }
-
+/* ── Draw cursor ring around index tip ──────────────────── */
+function drawCursorAura(x, y, gesture) {
+  CTX.globalAlpha = 0.55;
+  CTX.beginPath();
+  CTX.arc(x, y, gesture === 'pinch' ? 18 : 12, 0, Math.PI * 2);
+  CTX.strokeStyle = gesture === 'pinch' ? '#ff6b00' : '#00d4ff';
+  CTX.lineWidth = 1.5;
+  CTX.stroke();
   CTX.globalAlpha = 1;
 }
 
-/* ── Dispatch synthetic mouse event ────────────────────── */
-function dispatchPointer(x, y) {
-  const el = document.elementFromPoint(x, y);
-  if (!el) return;
-  const ev = new MouseEvent('mousemove', {
-    clientX: x, clientY: y, bubbles: true,
-  });
-  document.dispatchEvent(ev);
+/* ── Draw gesture label ─────────────────────────────────── */
+function drawLabel(gesture) {
+  const labels = {
+    palm: '✋ PALM → CAMERA PARALLAX',
+    point: '👆 POINTING → HOVER',
+    pinch: '🤏 PINCH → CLICK',
+    idle: 'HAND DETECTED',
+  };
+  CTX.globalAlpha = 0.85;
+  CTX.font = '12px "Share Tech Mono", monospace';
+  CTX.fillStyle = gesture === 'pinch' ? '#ff6b00' : '#00d4ff';
+  CTX.fillText(labels[gesture] || '', 16, HAND_CANVAS.height - 36);
+  CTX.globalAlpha = 1;
 }
 
-let lastPinch = false;
+/* ── Dispatch synthetic mouse move ─────────────────────── */
+function drive(x, y) {
+  document.dispatchEvent(new MouseEvent('mousemove', {
+    clientX: x, clientY: y, bubbles: true,
+  }));
+  /* Move custom cursor */
+  if (CURSOR_DOT) {
+    CURSOR_DOT.style.left = x + 'px';
+    CURSOR_DOT.style.top  = y + 'px';
+  }
+}
 
+/* ── Main results handler ───────────────────────────────── */
 function onResults(results) {
   CTX.clearRect(0, 0, HAND_CANVAS.width, HAND_CANVAS.height);
+  updatePops();
+  drawPops();
 
   if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-    HAND_LABEL.textContent = 'NO HAND DETECTED';
+    setHUDGesture(null);
+    lastPinch = false;
     return;
   }
 
-  const landmarks = results.multiHandLandmarks[0];
-  const pinchDist = getPinchDistance(landmarks);
-  const pinching  = pinchDist < 0.06;
-  const palm      = isOpenPalm(landmarks);
-  const pointing  = isPointing(landmarks);
+  const lm      = results.multiHandLandmarks[0];
+  const W       = HAND_CANVAS.width;
+  const H       = HAND_CANVAS.height;
+  const pinching = pinchDist(lm) < 0.065;
+  const palm     = isOpenPalm(lm);
+  const pointing = isPointing(lm);
 
-  let gesture = 'idle';
-  if (pinching)     gesture = 'pinch';
-  else if (palm)    gesture = 'palm';
-  else if (pointing) gesture = 'point';
+  const gesture = pinching ? 'pinch' : palm ? 'palm' : pointing ? 'point' : 'idle';
+  setHUDGesture(gesture);
 
-  drawHand(landmarks, gesture);
+  /* Screen coords of index tip (mirrored) */
+  const ix = (1 - lm[8].x) * W;
+  const iy = lm[8].y * H;
+  smooth.x += (ix - smooth.x) * 0.22;
+  smooth.y += (iy - smooth.y) * 0.22;
 
-  /* Map index finger tip to screen coordinates */
-  const ix = (1 - landmarks[8].x) * window.innerWidth;
-  const iy = landmarks[8].y * window.innerHeight;
+  /* Draw */
+  drawSkeleton(lm, gesture);
+  drawCursorAura(smooth.x, smooth.y, gesture);
+  drawLabel(gesture);
 
-  /* Smoothing */
-  smooth.x += (ix - smooth.x) * 0.2;
-  smooth.y += (iy - smooth.y) * 0.2;
+  /* Drive interactions */
+  drive(smooth.x, smooth.y);
 
-  /* Drive mouse-based interactions */
-  dispatchPointer(smooth.x, smooth.y);
-
-  /* Pinch = click */
+  /* Pinch = click + burst */
   if (pinching && !lastPinch) {
+    spawnPinchBurst(smooth.x, smooth.y);
     const el = document.elementFromPoint(smooth.x, smooth.y);
-    if (el) {
-      el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: smooth.x, clientY: smooth.y }));
-      /* Visual flash */
-      CTX.beginPath();
-      CTX.arc(smooth.x, smooth.y, 22, 0, Math.PI * 2);
-      CTX.fillStyle = 'rgba(255,107,0,0.45)';
-      CTX.fill();
-    }
+    if (el) el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: smooth.x, clientY: smooth.y }));
+    notify('🤏 Pinch click!');
   }
   lastPinch = pinching;
-
-  /* Update status label */
-  const gestureText = {
-    idle:  'HAND DETECTED',
-    pinch: 'PINCH — CLICK',
-    palm:  'OPEN PALM — NAVIGATE',
-    point: 'POINTING — HOVER',
-  };
-  HAND_LABEL.textContent = gestureText[gesture];
 }
 
-/* ── Start tracking ─────────────────────────────────────── */
-async function startTracking() {
-  if (typeof Hands === 'undefined') {
-    notify('⚠ MediaPipe not loaded. Check your connection.');
-    return;
-  }
+/* ── Frame handler (passed to CameraManager) ────────────── */
+async function frameHandler(video) {
+  if (handsInstance) await handsInstance.send({ image: video });
+}
+
+/* ── Start / Stop ───────────────────────────────────────── */
+async function start() {
+  if (typeof Hands === 'undefined') throw new Error('MediaPipe Hands not loaded');
 
   handsInstance = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`,
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`,
   });
-
   handsInstance.setOptions({
     maxNumHands: 1,
     modelComplexity: 1,
@@ -198,52 +251,44 @@ async function startTracking() {
   });
   handsInstance.onResults(onResults);
 
-  cameraInstance = new Camera(HAND_VIDEO, {
-    onFrame: async () => { await handsInstance.send({ image: HAND_VIDEO }); },
-    width: 640,
-    height: 480,
-  });
-
-  await cameraInstance.start();
-  HAND_STATUS.classList.add('visible');
-  HAND_LABEL.textContent = 'INITIALIZING…';
+  await registerHandler('hands', frameHandler);
+  HUD.classList.add('visible');
 }
 
-/* ── Stop tracking ──────────────────────────────────────── */
-function stopTracking() {
-  if (cameraInstance) cameraInstance.stop();
-  if (handsInstance)  handsInstance.close();
-  cameraInstance = null;
-  handsInstance  = null;
+function stop() {
+  unregisterHandler('hands');
+  if (handsInstance) { handsInstance.close(); handsInstance = null; }
   CTX.clearRect(0, 0, HAND_CANVAS.width, HAND_CANVAS.height);
-  HAND_STATUS.classList.remove('visible');
+  HUD.classList.remove('visible');
+  setHUDGesture(null);
+  lastPinch = false;
 }
 
-/* ── Toggle button ──────────────────────────────────────── */
-function notify(msg) {
+/* ── Button toggle ──────────────────────────────────────── */
+function notify(msg, d = 2500) {
   const el = document.getElementById('notification');
   if (!el) return;
   el.textContent = msg;
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 3000);
+  setTimeout(() => el.classList.remove('show'), d);
 }
 
-HAND_BTN?.addEventListener('click', async () => {
-  trackingEnabled = !trackingEnabled;
-  HAND_BTN.classList.toggle('active-track', trackingEnabled);
+BTN?.addEventListener('click', async () => {
+  active = !active;
+  BTN.classList.toggle('active-track', active);
 
-  if (trackingEnabled) {
+  if (active) {
     notify('✋ Requesting camera for hand tracking…');
     try {
-      await startTracking();
-      notify('✓ Hand tracking active!');
+      await start();
+      notify('✓ Hand tracking active! Try ✋ palm, 👆 point, 🤏 pinch');
     } catch (err) {
-      trackingEnabled = false;
-      HAND_BTN.classList.remove('active-track');
-      notify(`⚠ Camera access denied: ${err.message}`);
+      active = false;
+      BTN.classList.remove('active-track');
+      notify(`⚠ ${err.message}`);
     }
   } else {
-    stopTracking();
-    notify('Hand tracking disabled.');
+    stop();
+    notify('Hand tracking off.');
   }
 });
