@@ -60,7 +60,7 @@ function steelMat(color = 0x2a2a35, rough = 0.35, metal = 0.95) {
 /* ══════════════════════════════════════════════════════════
    PARTICLE SYSTEM
    ══════════════════════════════════════════════════════════ */
-function makeParticles(count, spread, color = 0x00d4ff) {
+function makeParticles(count, spread, color = 0xB07535) {
   const geo = new THREE.BufferGeometry();
   const pos = new Float32Array(count * 3);
   const speeds = new Float32Array(count);
@@ -89,236 +89,397 @@ function makeRenderer(canvas, w, h, alpha = false) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   ██  HERO SCENE  ██
+   ██  HERO SCENE — Warm Workspace + Scroll Camera  ██
    ══════════════════════════════════════════════════════════ */
 class HeroScene {
   constructor(canvas) {
-    this.canvas = canvas;
-    this.w = canvas.offsetWidth  || window.innerWidth;
-    this.h = canvas.offsetHeight || window.innerHeight;
-    this.clock = new THREE.Clock();
+    this.canvas  = canvas;
+    this.clock   = new THREE.Clock();
+    this.w       = window.innerWidth;
+    this.h       = window.innerHeight;
 
-    this.renderer = makeRenderer(canvas, this.w, this.h);
-    this.scene    = new THREE.Scene();
-    this.camera   = new THREE.PerspectiveCamera(55, this.w / this.h, 0.1, 100);
-    this.camera.position.set(0, 1, 9);
+    /* Renderer — warm white clear */
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this.renderer.setSize(this.w, this.h);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setClearColor(0xFDFAF5, 1);
+    this.renderer.shadowMap.enabled = true;
 
-    this.scene.fog = new THREE.FogExp2(0x060608, 0.06);
+    this.scene  = new THREE.Scene();
+    this.scene.fog = new THREE.Fog(0xFDFAF5, 18, 38);
+
+    this.camera = new THREE.PerspectiveCamera(52, this.w / this.h, 0.1, 80);
+
+    /* Camera waypoints for scroll */
+    this.cam = {
+      pos:    new THREE.Vector3(0.3, 1.2, 3.0),
+      target: new THREE.Vector3(0, 0.3, 0),
+    };
+    this.camTarget = new THREE.Vector3();
+    this.camera.position.copy(this.cam.pos);
 
     this._buildLights();
-    this._buildAssembly();
-    this._buildParticles();
-    this._buildPostFX();
+    this._buildWorkspace();
+    this._buildDripSystem();
+    this._buildFloatingGears();
+    this._buildDustParticles();
+    this._setupScrollCamera();
 
     window.addEventListener('resize', () => this._resize());
     this._resize();
   }
 
   _buildLights() {
-    this.scene.add(new THREE.AmbientLight(0x080818, 1.5));
+    /* Warm ambient */
+    this.scene.add(new THREE.AmbientLight(0xFFF5E8, 1.8));
 
-    const dA = new THREE.DirectionalLight(0xff8800, 3);
-    dA.position.set(4, 6, 3);
-    this.scene.add(dA);
+    /* Key — warm gold from top-right */
+    const key = new THREE.DirectionalLight(0xFFD4A0, 3.5);
+    key.position.set(5, 8, 4);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    this.scene.add(key);
 
-    const dB = new THREE.DirectionalLight(0x0088ff, 2.5);
-    dB.position.set(-5, -3, 2);
-    this.scene.add(dB);
+    /* Fill — cool soft from left */
+    const fill = new THREE.DirectionalLight(0xDCECFF, 1.2);
+    fill.position.set(-6, 3, 2);
+    this.scene.add(fill);
 
-    const pt = new THREE.PointLight(0x00d4ff, 4, 8);
-    pt.position.set(0, 0, 3);
-    this.scene.add(pt);
-    this.centerLight = pt;
+    /* Rim — warm orange from below-back */
+    const rim = new THREE.DirectionalLight(0xFFAA55, 0.8);
+    rim.position.set(0, -3, -5);
+    this.scene.add(rim);
+
+    /* Nozzle hot-spot (updates with drip) */
+    this.nozzleLight = new THREE.PointLight(0xFFAA44, 2.5, 2.5);
+    this.nozzleLight.position.set(0, 1.38, 0);
+    this.scene.add(this.nozzleLight);
   }
 
-  _buildAssembly() {
-    const STEEL = steelMat(0x1e1e28, 0.25, 0.98);
-    const STEEL2 = steelMat(0x2a2a3a, 0.4, 0.9);
-    const CHROME = steelMat(0x8888a0, 0.1, 1.0);
-    const BLUE_EMIT = new THREE.MeshStandardMaterial({
-      color: 0x00d4ff, emissive: 0x00d4ff, emissiveIntensity: 0.8, metalness: 0.3, roughness: 0.1,
+  _buildWorkspace() {
+    /* ─ Desk surface (warm wood) ─ */
+    const deskMat = new THREE.MeshStandardMaterial({
+      color: 0x9B7140, roughness: 0.82, metalness: 0.05,
+    });
+    const desk = new THREE.Mesh(new THREE.BoxGeometry(9, 0.14, 5), deskMat);
+    desk.position.set(0, -1.5, 0);
+    desk.receiveShadow = true;
+    this.scene.add(desk);
+
+    /* Desk legs */
+    const legMat = steelMat(0x7A5C35, 0.7, 0.1);
+    [[-3.8, -2.3, -1.8], [3.8, -2.3, -1.8], [-3.8, -2.3, 1.8], [3.8, -2.3, 1.8]].forEach(([x, y, z]) => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.6, 0.12), legMat);
+      leg.position.set(x, y, z);
+      leg.castShadow = true;
+      this.scene.add(leg);
     });
 
-    /* ── Big Gear (16 teeth) ── */
-    const bigGeo = buildGear(1.8, 0.32, 0.45, 16, 0.5);
-    bigGeo.center();
-    this.bigGear = new THREE.Mesh(bigGeo, STEEL);
-    this.bigGear.position.set(-0.1, 0.2, 0);
-    this.scene.add(this.bigGear);
+    /* ─ 3D Printer frame ─ */
+    const frameMat = steelMat(0xC8C8D0, 0.35, 0.7);
+    const darkMat  = steelMat(0x3A3A42, 0.5, 0.6);
 
-    /* ── Medium Gear (10 teeth) ── */
-    const midGeo = buildGear(1.12, 0.28, 0.45, 10, 0.32);
-    midGeo.center();
-    this.midGear = new THREE.Mesh(midGeo, STEEL2);
-    this.midGear.position.set(-3.0, 0.2, 0.05);
-    this.scene.add(this.midGear);
+    const printerGroup = new THREE.Group();
 
-    /* ── Small Gear (8 teeth) ── */
-    const smlGeo = buildGear(0.72, 0.22, 0.4, 8, 0.22);
-    smlGeo.center();
-    this.smlGear = new THREE.Mesh(smlGeo, STEEL);
-    this.smlGear.position.set(2.6, -1.6, -0.05);
-    this.scene.add(this.smlGear);
+    /* Main frame posts */
+    [[-.45, 0], [.45, 0]].forEach(([x]) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 2.2, 0.05), frameMat);
+      post.position.set(x, 0, 0);
+      post.castShadow = true;
+      printerGroup.add(post);
+    });
+    /* Top crossbar */
+    const topBar = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.05, 0.05), frameMat);
+    topBar.position.y = 1.1;
+    printerGroup.add(topBar);
+    /* Base plate */
+    const basePlate = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.8), darkMat);
+    basePlate.position.y = -1.1;
+    basePlate.castShadow = true;
+    printerGroup.add(basePlate);
+    /* Build plate */
+    const buildPlate = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.04, 0.6), steelMat(0x9898A8, 0.4, 0.8));
+    buildPlate.position.set(0, -0.9, 0);
+    printerGroup.add(buildPlate);
+    this.buildPlateY = -0.9 + 0.02;
 
-    /* ── Central shaft ── */
-    const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.14, 0.14, 5, 24),
-      CHROME,
+    /* Extruder carriage */
+    const carriageMat = steelMat(0xA0A0B0, 0.3, 0.75);
+    const carriage = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.14), carriageMat);
+    carriage.position.set(0, 0.7, 0.05);
+    printerGroup.add(carriage);
+
+    /* Nozzle */
+    const nozzle = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.022, 0.01, 0.18, 8),
+      steelMat(0xE8C060, 0.2, 0.9),
     );
-    shaft.position.set(-0.1, 0.2, 0);
-    shaft.rotation.x = Math.PI / 2;
-    this.scene.add(shaft);
+    nozzle.position.set(0, 0.6, 0.05);
+    printerGroup.add(nozzle);
+    this.nozzleWorldY = -1.5 + 0.6 + 0.01;  /* desk + printer offset + nozzle tip */
 
-    /* ── Shaft rings (decorative) ── */
-    for (let i = 0; i < 3; i++) {
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(0.22, 0.045, 12, 32),
-        BLUE_EMIT,
+    /* Cooling fan */
+    const fan = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.04), darkMat);
+    fan.position.set(0.12, 0.7, 0.1);
+    printerGroup.add(fan);
+
+    /* Small display */
+    const dispMat = new THREE.MeshStandardMaterial({ color: 0x446688, emissive: 0x223344, emissiveIntensity: 0.8 });
+    const disp = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.18, 0.02), dispMat);
+    disp.position.set(-0.35, -0.7, 0.42);
+    printerGroup.add(disp);
+
+    printerGroup.position.set(-0.4, -1.5 + 1.1, 0.2);
+    this.scene.add(printerGroup);
+    this.printerGroup = printerGroup;
+    this.carriageMesh = carriage;
+
+    /* ─ Monitor (to the right of printer) ─ */
+    const monitorGroup = new THREE.Group();
+    const screenMat = new THREE.MeshStandardMaterial({
+      color: 0x334455, emissive: 0x1A3A5A, emissiveIntensity: 0.6, roughness: 0.05, metalness: 0.1,
+    });
+    const screenFrame = steelMat(0x2A2A2E, 0.5, 0.8);
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.9, 0.05), screenMat);
+    monitorGroup.add(screen);
+    const bezel = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.0, 0.04), screenFrame);
+    bezel.position.z = -0.02;
+    monitorGroup.add(bezel);
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.06), screenFrame);
+    stand.position.y = -0.7;
+    monitorGroup.add(stand);
+    const standBase = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.25), screenFrame);
+    standBase.position.y = -0.95;
+    monitorGroup.add(standBase);
+    monitorGroup.position.set(2.6, -0.8, -0.5);
+    monitorGroup.rotation.y = -0.2;
+    this.scene.add(monitorGroup);
+
+    /* ─ Book stack ─ */
+    const bookColors = [0xB44444, 0x4466AA, 0x55885A];
+    bookColors.forEach((c, i) => {
+      const book = new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 0.06 + i * 0.01, 0.4),
+        new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, metalness: 0.0 }),
       );
-      ring.position.set(-0.1, 0.2, -0.8 + i * 0.8);
-      this.scene.add(ring);
-    }
+      book.position.set(3.5, -1.42 + i * 0.07, 0.8);
+      book.rotation.y = (i - 1) * 0.08;
+      this.scene.add(book);
+    });
 
-    /* ── Bolts on big gear ── */
-    const boltGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.55, 8);
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const bolt = new THREE.Mesh(boltGeo, CHROME);
-      bolt.position.set(
-        -0.1 + Math.cos(a) * 1.2,
-        0.2  + Math.sin(a) * 1.2,
-        0,
-      );
-      bolt.rotation.x = Math.PI / 2;
-      this.bigGear.add(bolt);
-    }
+    /* ─ Coffee mug ─ */
+    const mugMat = new THREE.MeshStandardMaterial({ color: 0xCCA85A, roughness: 0.7, metalness: 0.0 });
+    const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.18, 16), mugMat);
+    mug.position.set(1.8, -1.42, 0.9);
+    this.scene.add(mug);
+    /* Handle */
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.018, 6, 12, Math.PI), mugMat);
+    handle.position.set(1.88, -1.42, 0.9);
+    handle.rotation.y = Math.PI / 2;
+    this.scene.add(handle);
 
-    /* ── Background plate ── */
-    const plate = new THREE.Mesh(
-      new THREE.CylinderGeometry(3.2, 3.2, 0.12, 64),
-      steelMat(0x0e0e18, 0.8, 0.3),
-    );
-    plate.position.set(-0.1, 0.2, -0.5);
-    plate.rotation.x = Math.PI / 2;
-    this.scene.add(plate);
+    /* ─ Floor / warm paper texture ─ */
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0xF0E8D8, roughness: 1.0, metalness: 0.0 });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -3.1;
+    floor.receiveShadow = true;
+    this.scene.add(floor);
 
-    /* ── Turbine blades behind ── */
-    const bladeGeo = new THREE.BoxGeometry(0.1, 0.9, 0.08);
-    const bladeMat = steelMat(0x333345, 0.5, 0.8);
-    this.bladeGroup = new THREE.Group();
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      const blade = new THREE.Mesh(bladeGeo, bladeMat);
-      blade.position.set(Math.cos(a) * 2.4, Math.sin(a) * 2.4, -0.4);
-      blade.rotation.z = a;
-      this.bladeGroup.add(blade);
-    }
-    this.bladeGroup.position.set(-0.1, 0.2, 0);
-    this.scene.add(this.bladeGroup);
-
-    /* ── Piston rod ── */
-    const rodMat = CHROME;
-    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.5, 12), rodMat);
-    rod.position.set(3.8, 0, 0);
-    rod.rotation.z = Math.PI / 2;
-    this.scene.add(rod);
-    this.pistonRod = rod;
-
-    /* ── Piston head ── */
-    const pistonHead = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.35, 0.35, 0.6, 24),
-      STEEL2,
-    );
-    pistonHead.rotation.z = Math.PI / 2;
-    this.scene.add(pistonHead);
-    this.pistonHead = pistonHead;
-
-    /* ── Grid floor ── */
-    const grid = new THREE.GridHelper(20, 30, 0x00d4ff, 0x111122);
-    grid.position.y = -3.5;
-    grid.material.opacity = 0.3;
-    grid.material.transparent = true;
-    this.scene.add(grid);
+    /* ─ Back wall ─ */
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshStandardMaterial({ color: 0xF8F3EB, roughness: 1.0 }));
+    wall.position.set(0, 4, -8);
+    this.scene.add(wall);
   }
 
-  _buildParticles() {
-    this.particles = makeParticles(1200, 14, 0x00d4ff);
-    this.scene.add(this.particles);
-
-    this.sparks = makeParticles(300, 6, 0xff6b00);
-    this.sparks.material.size = 0.06;
-    this.sparks.material.opacity = 0.5;
-    this.scene.add(this.sparks);
+  _buildDripSystem() {
+    this.drips      = [];
+    this.dripTimer  = 0;
+    this.dripGeo    = new THREE.SphereGeometry(0.045, 7, 7);
+    this.moltenMat  = new THREE.MeshStandardMaterial({
+      color: 0xE8A040, emissive: 0xD07820, emissiveIntensity: 0.7,
+      metalness: 0.2, roughness: 0.4,
+    });
+    this.settledMat = new THREE.MeshStandardMaterial({
+      color: 0xA0A8B8, metalness: 0.65, roughness: 0.35,
+    });
+    /* Pre-settled drops forming a small gear-like layer on build plate */
+    this.settledGroup = new THREE.Group();
+    this.settledGroup.position.set(-0.4, -1.5 + 1.1 - 0.9 + 0.02 + 0.045, 0.2);
+    this.scene.add(this.settledGroup);
   }
 
-  _buildPostFX() {
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    const bloom = new UnrealBloomPass(
-      new THREE.Vector2(this.w, this.h), 0.9, 0.5, 0.82,
+  _buildFloatingGears() {
+    const gearMat = new THREE.MeshStandardMaterial({
+      color: 0xC8A050, roughness: 0.35, metalness: 0.85,
+    });
+    this.floatingGears = [];
+    const configs = [
+      { r: 0.5, t: 8, d: 0.1, pos: [3.2, 0.4, -1.2], speed: 0.18 },
+      { r: 0.32, t: 6, d: 0.08, pos: [3.8, 0.9, -0.9], speed: -0.28 },
+      { r: 0.22, t: 5, d: 0.06, pos: [-3.0, 1.1, -0.8], speed: 0.35 },
+    ];
+    configs.forEach(cfg => {
+      const geo = buildGear(cfg.r, cfg.r * 0.18, cfg.d, cfg.t, cfg.r * 0.3);
+      geo.center();
+      const mesh = new THREE.Mesh(geo, gearMat);
+      mesh.position.set(...cfg.pos);
+      mesh.castShadow = true;
+      this.scene.add(mesh);
+      this.floatingGears.push({ mesh, speed: cfg.speed, baseY: cfg.pos[1] });
+    });
+  }
+
+  _buildDustParticles() {
+    const count = 600;
+    const pos   = new Float32Array(count * 3);
+    const spd   = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      pos[i * 3]     = (Math.random() - 0.5) * 16;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 8;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 10;
+      spd[i]         = Math.random() * 0.3 + 0.1;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.userData.speeds = spd;
+    const mat = new THREE.PointsMaterial({
+      color: 0xC8A060, size: 0.025, transparent: true, opacity: 0.45, sizeAttenuation: true,
+    });
+    this.dust = new THREE.Points(geo, mat);
+    this.scene.add(this.dust);
+  }
+
+  _setupScrollCamera() {
+    if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+    gsap.registerPlugin(ScrollTrigger);
+
+    /* Waypoints: [posX, posY, posZ,  lookX, lookY, lookZ] */
+    const WP = [
+      [0.3,  1.0, 3.0,   0,   0.2, 0],
+      [1.8,  2.2, 7.5,   0,  -0.3, 0],
+      [0.0,  5.5, 14.0,  0,  -1.5, 0],
+    ];
+
+    this.scrollProg = { t: 0 };
+
+    ScrollTrigger.create({
+      trigger: '#hero',
+      start: 'top top',
+      end: 'bottom top',
+      scrub: 1.8,
+      onUpdate: (self) => {
+        this.scrollProg.t = self.progress;
+      },
+    });
+
+    this._wp = WP;
+  }
+
+  _lerp(a, b, t) { return a + (b - a) * t; }
+
+  _applyScrollCamera(t) {
+    if (!this._wp) return;
+    const WP = this._wp;
+    const seg = t < 0.5 ? 0 : 1;
+    const lt  = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+    const w0  = WP[seg], w1 = WP[seg + 1];
+    const ease = lt * lt * (3 - 2 * lt);
+
+    this.cam.pos.set(
+      this._lerp(w0[0], w1[0], ease),
+      this._lerp(w0[1], w1[1], ease),
+      this._lerp(w0[2], w1[2], ease),
     );
-    this.composer.addPass(bloom);
-    this.composer.addPass(new OutputPass());
+    this.cam.target.set(
+      this._lerp(w0[3], w1[3], ease),
+      this._lerp(w0[4], w1[4], ease),
+      this._lerp(w0[5], w1[5], ease),
+    );
   }
 
   _resize() {
-    const el = this.canvas.parentElement;
-    this.w = el ? el.clientWidth  : window.innerWidth;
-    this.h = el ? el.clientHeight : window.innerHeight;
+    this.w = window.innerWidth;
+    this.h = window.innerHeight;
     this.renderer.setSize(this.w, this.h);
     this.camera.aspect = this.w / this.h;
     this.camera.updateProjectionMatrix();
-    this.composer.setSize(this.w, this.h);
   }
 
   tick() {
-    const t = this.clock.getElapsedTime();
+    const t  = this.clock.getElapsedTime();
+    const dt = this.clock.getDelta ? 0.016 : 0.016;
 
-    /* Gear rotation with correct speed ratios */
-    this.bigGear.rotation.z  =  t * 0.22;
-    this.midGear.rotation.z  = -t * 0.22 * (1.8 / 1.12);
-    this.smlGear.rotation.z  = -t * 0.22 * (1.8 / 0.72);
+    /* ── Scroll camera ── */
+    const sp = this.scrollProg ? this.scrollProg.t : 0;
+    this._applyScrollCamera(sp);
 
-    /* Blades spin slower */
-    this.bladeGroup.rotation.z = -t * 0.15;
+    /* Smooth camera to target */
+    this.camera.position.lerp(this.cam.pos, 0.06);
+    this.camTarget.lerp(this.cam.target, 0.06);
 
-    /* Piston motion (driven by small gear) */
-    const pistonX = 4.6 + Math.sin(t * 0.22 * (1.8 / 0.72) * 2) * 0.9;
-    this.pistonHead.position.set(pistonX, -1.6, -0.05);
-    this.pistonRod.position.set(pistonX - 1.1, -1.6, -0.05);
+    /* Mouse parallax (subtle, only on x/y, scaled by inverse scroll) */
+    const parallaxScale = Math.max(0, 1 - sp * 2);
+    this.camera.position.x += (mouse.nx * 0.6 * parallaxScale - 0) * 0.03;
+    this.camera.position.y += (mouse.ny * 0.4 * parallaxScale - 0) * 0.03;
+    this.camera.lookAt(this.camTarget);
 
-    /* Particles drift */
-    const pPos = this.particles.geometry.attributes.position;
-    for (let i = 0; i < pPos.count; i++) {
-      pPos.setY(i, pPos.getY(i) + 0.004 * this.particles.geometry.userData.speeds[i]);
-      if (pPos.getY(i) > 7) pPos.setY(i, -7);
+    /* ── Drip system ── */
+    this.dripTimer += 0.016;
+    if (this.dripTimer > 0.38 && this.drips.length < 28) {
+      this.dripTimer = 0;
+      const mesh = new THREE.Mesh(this.dripGeo, this.moltenMat.clone());
+      mesh.position.set(-0.4, -1.5 + 1.1 + 0.61, 0.2);
+      mesh.castShadow = true;
+      mesh.userData.vy = 0;
+      this.scene.add(mesh);
+      this.drips.push(mesh);
     }
-    pPos.needsUpdate = true;
-
-    /* Sparks spiral */
-    const sPos = this.sparks.geometry.attributes.position;
-    for (let i = 0; i < sPos.count; i++) {
-      sPos.setX(i, sPos.getX(i) + 0.003 * (Math.random() - 0.5));
-      sPos.setY(i, sPos.getY(i) + 0.006 * this.sparks.geometry.userData.speeds[i]);
-      if (sPos.getY(i) > 4) {
-        sPos.setY(i, -4);
-        sPos.setX(i, (Math.random() - 0.5) * 6);
-        sPos.setZ(i, (Math.random() - 0.5) * 6);
+    for (let i = this.drips.length - 1; i >= 0; i--) {
+      const d = this.drips[i];
+      if (d.userData.settled) {
+        /* Fade emissive to settled over 2s */
+        if (d.material.emissiveIntensity > 0) {
+          d.material.emissiveIntensity -= 0.008;
+        }
+        continue;
+      }
+      d.userData.vy -= 5 * 0.016;
+      d.position.y  += d.userData.vy * 0.016;
+      const groundY = this.buildPlateY - 1.5 + 1.1 + 0.045;
+      if (d.position.y <= groundY) {
+        d.position.y   = groundY;
+        d.userData.settled = true;
+        d.scale.set(1.6, 0.35, 1.6);
+        d.material = this.settledMat.clone();
+        d.material.emissiveIntensity = 0;
+        /* Glow burst on landing */
+        this.nozzleLight.intensity = 5.0;
       }
     }
-    sPos.needsUpdate = true;
 
-    /* Center light pulse */
-    this.centerLight.intensity = 3.5 + Math.sin(t * 2.2) * 0.8;
+    /* Nozzle glow pulse + settle fade */
+    const nGlow = 2.0 + Math.sin(t * 4) * 0.5;
+    this.nozzleLight.intensity += (nGlow - this.nozzleLight.intensity) * 0.08;
 
-    /* Mouse camera parallax */
-    const tx = mouse.nx * 1.4;
-    const ty = mouse.ny * 0.8;
-    this.camera.position.x += (tx - this.camera.position.x) * 0.04;
-    this.camera.position.y += (ty + 1 - this.camera.position.y) * 0.04;
-    this.camera.lookAt(0, 0, 0);
+    /* ── Floating gears ── */
+    this.floatingGears.forEach((g, i) => {
+      g.mesh.rotation.z += g.speed * 0.016;
+      g.mesh.position.y = g.baseY + Math.sin(t * 0.6 + i * 1.2) * 0.08;
+    });
 
-    this.composer.render();
+    /* ── Dust particles ── */
+    const dPos = this.dust.geometry.attributes.position;
+    const spds = this.dust.geometry.userData.speeds;
+    for (let i = 0; i < dPos.count; i++) {
+      dPos.setY(i, dPos.getY(i) + 0.003 * spds[i]);
+      dPos.setX(i, dPos.getX(i) + Math.sin(t * 0.2 + i) * 0.0008);
+      if (dPos.getY(i) > 5)  dPos.setY(i, -5);
+      if (dPos.getY(i) < -5) dPos.setY(i, 5);
+    }
+    dPos.needsUpdate = true;
+
+    this.renderer.render(this.scene, this.camera);
   }
 }
 
@@ -326,24 +487,24 @@ class HeroScene {
    ██  GALLERY PROJECT CANVASES  ██
    ══════════════════════════════════════════════════════════ */
 function buildProjectScene(idx) {
-  const colors  = [0x1e3a5f, 0x1a2e1a, 0x2a1a3a, 0x3a2a1a, 0x1a2a3a, 0x2a1a1a];
-  const accents = [0x00d4ff, 0x00ff88, 0xaa44ff, 0xff8800, 0x00ccff, 0xff4444];
-  const scene   = new THREE.Scene();
-  scene.background = new THREE.Color(colors[idx]);
-  scene.fog = new THREE.FogExp2(colors[idx], 0.12);
+  const bgColors = [0xF5EFE4, 0xEFF5E4, 0xF0EAF8, 0xF8F0E4, 0xE4EFF5, 0xF8EAE4];
+  const accents  = [0xB07535, 0x5A8844, 0x8844CC, 0xC07020, 0x2288BB, 0xCC3344];
+  const scene    = new THREE.Scene();
+  scene.background = new THREE.Color(bgColors[idx]);
+  scene.fog = new THREE.FogExp2(bgColors[idx], 0.1);
 
-  const light1 = new THREE.DirectionalLight(accents[idx], 3);
+  const light1 = new THREE.DirectionalLight(0xFFD4A0, 3.5);
   light1.position.set(2, 4, 3);
   scene.add(light1);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+  scene.add(new THREE.AmbientLight(0xFFF5E8, 1.2));
 
-  const pt = new THREE.PointLight(accents[idx], 4, 5);
+  const pt = new THREE.PointLight(accents[idx], 3, 6);
   pt.position.set(0, 1, 2);
   scene.add(pt);
 
-  const STEEL = steelMat(0x303040, 0.3, 0.95);
+  const STEEL = steelMat(0xB0A898, 0.4, 0.7);
   const ACCENT = new THREE.MeshStandardMaterial({
-    color: accents[idx], emissive: accents[idx], emissiveIntensity: 0.6, metalness: 0.4, roughness: 0.1,
+    color: accents[idx], emissive: accents[idx], emissiveIntensity: 0.35, metalness: 0.5, roughness: 0.2,
   });
 
   let group = new THREE.Group();
@@ -429,7 +590,7 @@ function buildProjectScene(idx) {
 
   } else {
     /* Factory layout — city-like blocks */
-    const flr = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 1.4), steelMat(0x1a1a28, 0.9, 0.2));
+    const flr = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 1.4), steelMat(0xD0C8B8, 0.9, 0.1));
     flr.position.y = -0.6;
     group.add(flr);
     const buildings = [[0, 0.3], [0.5, 0.55], [-0.5, 0.4], [0.9, 0.3], [-0.9, 0.5]];
@@ -520,7 +681,7 @@ class ProcessScene {
     /* Wireframe version */
     this.wireFrame = new THREE.Mesh(
       geo,
-      new THREE.MeshBasicMaterial({ color: 0x00d4ff, wireframe: true, opacity: 0.3, transparent: true }),
+      new THREE.MeshBasicMaterial({ color: 0xB07535, wireframe: true, opacity: 0.35, transparent: true }),
     );
     this.scene.add(this.wireFrame);
 
@@ -528,9 +689,9 @@ class ProcessScene {
     this.solid = new THREE.Mesh(
       geo,
       new THREE.MeshStandardMaterial({
-        color: 0x1a2030,
-        roughness: 0.2,
-        metalness: 0.95,
+        color: 0xD4C0A0,
+        roughness: 0.3,
+        metalness: 0.7,
         opacity: 0,
         transparent: true,
       }),
@@ -538,21 +699,21 @@ class ProcessScene {
     this.scene.add(this.solid);
 
     /* Lights */
-    const dl = new THREE.DirectionalLight(0x00d4ff, 2);
+    const dl = new THREE.DirectionalLight(0xFFD4A0, 2.5);
     dl.position.set(3, 5, 3);
     this.scene.add(dl);
-    const dl2 = new THREE.DirectionalLight(0xff6b00, 1.5);
+    const dl2 = new THREE.DirectionalLight(0xC94C18, 1.2);
     dl2.position.set(-4, -3, 2);
     this.scene.add(dl2);
-    this.scene.add(new THREE.AmbientLight(0x080818, 2));
+    this.scene.add(new THREE.AmbientLight(0xFFF5E8, 2.5));
 
     /* Background particles */
-    this.bgParticles = makeParticles(800, 20, 0x00d4ff);
+    this.bgParticles = makeParticles(800, 20, 0xB07535);
     this.bgParticles.material.size = 0.03;
     this.scene.add(this.bgParticles);
 
     /* Grid lines */
-    const grid = new THREE.GridHelper(30, 40, 0x001122, 0x001122);
+    const grid = new THREE.GridHelper(30, 40, 0xD4C4A0, 0xE8DCC8);
     grid.position.y = -4;
     grid.material.opacity = 0.4;
     grid.material.transparent = true;
@@ -626,20 +787,20 @@ class ContactScene {
     this.scene.add(this.stars);
 
     /* Blue nebula particles */
-    const neb = makeParticles(600, 25, 0x00d4ff);
+    const neb = makeParticles(600, 25, 0xB07535);
     neb.material.size = 0.12;
     neb.material.opacity = 0.15;
     this.scene.add(neb);
 
     /* Orange nebula */
-    const neb2 = makeParticles(400, 20, 0xff6b00);
+    const neb2 = makeParticles(400, 20, 0xC94C18);
     neb2.material.size = 0.1;
     neb2.material.opacity = 0.12;
     this.scene.add(neb2);
 
     /* Holographic rings */
     this.rings = [];
-    const ringColors = [0x00d4ff, 0xff6b00, 0x8888ff];
+    const ringColors = [0xB07535, 0xC94C18, 0x8888ff];
     for (let i = 0; i < 3; i++) {
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(2.0 + i * 1.2, 0.025, 8, 80),
@@ -655,8 +816,8 @@ class ContactScene {
     const orb = new THREE.Mesh(
       new THREE.SphereGeometry(0.5, 32, 32),
       new THREE.MeshStandardMaterial({
-        color: 0x00d4ff,
-        emissive: 0x00d4ff,
+        color: 0xB07535,
+        emissive: 0xB07535,
         emissiveIntensity: 1.2,
         metalness: 0.2,
         roughness: 0.05,
@@ -667,12 +828,12 @@ class ContactScene {
     this.scene.add(orb);
     this.orb = orb;
 
-    const ptLight = new THREE.PointLight(0x00d4ff, 6, 20);
+    const ptLight = new THREE.PointLight(0xB07535, 6, 20);
     ptLight.position.set(0, 0, 0);
     this.scene.add(ptLight);
     this.ptLight = ptLight;
 
-    this.scene.add(new THREE.AmbientLight(0x050510, 2));
+    this.scene.add(new THREE.AmbientLight(0xFFF5E8, 2));
   }
 
   _resize() {
@@ -726,10 +887,10 @@ class GalleryBgScene {
   }
 
   _build() {
-    this.scene.fog = new THREE.FogExp2(0x04040a, 0.05);
-    this.scene.add(new THREE.AmbientLight(0x060618, 3));
+    this.scene.fog = new THREE.FogExp2(0xF3EDE1, 0.04);
+    this.scene.add(new THREE.AmbientLight(0xFFF5E8, 2.5));
 
-    const dl = new THREE.DirectionalLight(0x0044aa, 1);
+    const dl = new THREE.DirectionalLight(0xFFD4A0, 2.5);
     dl.position.set(0, 8, 4);
     this.scene.add(dl);
 
@@ -743,18 +904,18 @@ class GalleryBgScene {
       const g = new THREE.Group();
       const plinth = new THREE.Mesh(
         new THREE.BoxGeometry(1.2, 0.1, 1.2),
-        steelMat(0x1a1a28, 0.6, 0.5),
+        steelMat(0xD8CDB8, 0.6, 0.2),
       );
       g.add(plinth);
       const pedGeo = new THREE.CylinderGeometry(0.08, 0.14, 0.5, 8);
-      const ped = new THREE.Mesh(pedGeo, steelMat(0x333345, 0.3, 0.9));
+      const ped = new THREE.Mesh(pedGeo, steelMat(0xC0B090, 0.4, 0.4));
       ped.position.y = -0.3;
       g.add(ped);
 
       /* Glow ring under platform */
       const gRing = new THREE.Mesh(
         new THREE.TorusGeometry(0.5, 0.02, 6, 32),
-        new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.4 }),
+        new THREE.MeshBasicMaterial({ color: 0xB07535, transparent: true, opacity: 0.4 }),
       );
       gRing.rotation.x = Math.PI / 2;
       gRing.position.y = -0.5;
@@ -766,14 +927,14 @@ class GalleryBgScene {
     });
 
     /* Grid floor */
-    const grid = new THREE.GridHelper(30, 40, 0x001133, 0x001133);
+    const grid = new THREE.GridHelper(30, 40, 0xD4C4A0, 0xE8DCC8);
     grid.position.y = -0.6;
     grid.material.opacity = 0.5;
     grid.material.transparent = true;
     this.scene.add(grid);
 
     /* Background particles */
-    this.bgP = makeParticles(500, 20, 0x00d4ff);
+    this.bgP = makeParticles(500, 20, 0xB07535);
     this.bgP.material.size = 0.03;
     this.bgP.material.opacity = 0.3;
     this.scene.add(this.bgP);
